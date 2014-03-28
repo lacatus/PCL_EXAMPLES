@@ -1,0 +1,76 @@
+// PCL
+#include <pcl/point_types.h>
+
+#include <pcl/filters/filter.h>
+
+#include <pcl/io/pcd_io.h>
+
+#include <pcl/features/fpfh.h>
+#include <pcl/features/normal_3d.h>
+
+#include <pcl/visualization/pcl_visualizer.h>
+
+int main (int argc, char* argv[])
+{
+
+	pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_input	(new pcl::PointCloud<pcl::PointXYZ>); // original
+	pcl::PointCloud<pcl::PointNormal>::Ptr cloud_normals (new pcl::PointCloud<pcl::PointNormal> ()); // normales --> original
+
+	// Load cloud_input
+	if (pcl::io::loadPCDFile<pcl::PointXYZ> (argv[1], *cloud_input) < 0)	{
+		PCL_ERROR("Error loading cloud %s.\n", argv[1]);
+		return -1;
+	}
+
+	// Remove NAN points from the cloud
+      	std::vector<int> indices;
+	pcl::removeNaNFromPointCloud(*cloud_input,*cloud_input, indices); 
+
+	// NORMAL ESTIMATION
+	pcl::NormalEstimation<pcl::PointXYZ, pcl::PointNormal> norm_est;
+	pcl::search::KdTree<pcl::PointXYZ>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZ> ());
+
+	norm_est.setRadiusSearch(0.03); 
+	norm_est.setSearchMethod (tree);
+
+	norm_est.setInputCloud (cloud_input);
+	norm_est.compute (*cloud_normals);
+
+	// Create the FPFH estimation class, and pass the input dataset+normals to it
+	pcl::FPFHEstimation<pcl::PointXYZ, pcl::PointNormal, pcl::FPFHSignature33> fpfh;
+	fpfh.setInputCloud (cloud_input);
+	fpfh.setInputNormals (cloud_normals);
+	// alternatively, if cloud is of tpe PointNormal, do fpfh.setInputNormals (cloud);
+
+	// Create an empty kdtree representation, and pass it to the FPFH estimation object.
+	// Its content will be filled inside the object, based on the given input dataset (as no other search surface is given).
+	pcl::search::KdTree<pcl::PointXYZ>::Ptr tree_2 (new pcl::search::KdTree<pcl::PointXYZ>);
+
+	fpfh.setSearchMethod (tree_2);
+
+	// Output datasets
+	pcl::PointCloud<pcl::FPFHSignature33>::Ptr fpfhs (new pcl::PointCloud<pcl::FPFHSignature33> ());
+
+	// Use all neighbors in a sphere of radius 5cm
+	// IMPORTANT: the radius used here has to be larger than the radius used to estimate the surface normals!!!
+	fpfh.setRadiusSearch (0.05);
+
+	// Compute the features
+	fpfh.compute (*fpfhs);
+
+	// VISUALIZATION
+	pcl::visualization::PCLVisualizer viewer ("FEATURES FPFH");
+
+	// Original point cloud is white
+	pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> cloud_input_color_h (cloud_input, 255, 255, 255);
+	viewer.addPointCloud (cloud_input, cloud_input_color_h, "cloud_input");
+
+
+	while(!viewer.wasStopped ())
+	{
+		viewer.spinOnce ();
+
+	}
+	
+	
+}

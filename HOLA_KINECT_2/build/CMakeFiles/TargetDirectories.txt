@@ -1,0 +1,1 @@
+/home/lacatus/Escritorio/3D/PCL_Proyects/HOLA_KINECT_2/build/CMakeFiles/openni_grabber.dir

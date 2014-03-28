@@ -1,0 +1,1 @@
+/home/lacatus/Escritorio/3D/PCL_Proyects/SACA_FOTO/build/CMakeFiles/saca_foto_pcd.dir

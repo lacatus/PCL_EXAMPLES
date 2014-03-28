@@ -1,0 +1,146 @@
+// Point cloud library
+#include <pcl/point_cloud.h>
+#include <pcl/io/pcd_io.h>
+#include <pcl/point_types.h>
+#include <pcl/filters/passthrough.h>
+#include <pcl/visualization/pcl_visualizer.h>
+
+// Opencv
+#include <opencv2/core/core.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/highgui/highgui.hpp>
+
+#include <iostream>
+#include <string>
+#include <stdio.h>
+#include <time.h>
+
+using namespace cv;
+
+// These are track bar initial settings adjusted to the given pointcloud to make it completely visible.
+//  Need to be adjusted depending on the pointcloud and its xyz limits if used with new pointclouds.
+
+int x_max = 60;
+int x_min = 60;
+int y_max = 60;
+int y_min = 60;
+int z_max = 60;
+int z_min = 60;
+
+// PCL Visualizer to view the pointcloud
+pcl::visualization::PCLVisualizer viewer ("Simple visualizing window");
+
+char key = 0; 
+
+const std::string currentDateTime() {
+	time_t     now = time(0);
+	struct tm  tstruct;
+	char       buf[80];
+	tstruct = *localtime(&now);
+	// http://en.cppreference.com/w/cpp/chrono/c/strftime
+	strftime(buf, sizeof(buf), "%d_%m_%Y_%H_%M_%S", &tstruct);
+	return buf;
+}
+
+static void keyboardEventOccurred (const pcl::visualization::KeyboardEvent &event,void* viewer_void)	
+{ 
+	if (event.getKeySym () == "c" && event.keyDown ()) 
+	{ 
+		key = 'c'; 
+	} 
+	if (event.keyUp()) 
+	{ 
+		key = 0; 
+	}
+} 
+
+int main (int argc, char** argv)
+{
+	viewer.registerKeyboardCallback(keyboardEventOccurred,(void*)NULL); 
+
+	pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZRGBA>);
+	pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud_filtered (new pcl::PointCloud<pcl::PointXYZRGBA>);
+
+	if (pcl::io::loadPCDFile<pcl::PointXYZRGBA> (argv[1], *cloud) == -1) //* load the ply file from command line
+	{
+		PCL_ERROR ("Couldn't load the file\n");
+	return (-1);
+	}
+
+	pcl::copyPointCloud(*cloud, *cloud_filtered);
+
+	float i_max,i_min;
+	float j_max,j_min;
+	float k_max,k_min;
+
+	cv::namedWindow( "picture");
+
+	// Creating trackbars uisng opencv to control the pcl filter limits
+	cvCreateTrackbar("X_limit_MAX", "picture", &x_max, 60, NULL);
+	cvCreateTrackbar("X_limit_MIN", "picture", &x_min, 60, NULL);
+	cvCreateTrackbar("Y_limit_MAX", "picture", &y_max, 60, NULL);
+	cvCreateTrackbar("Y_limit_MIN", "picture", &y_min, 60, NULL);
+	cvCreateTrackbar("Z_limit_MAX", "picture", &z_max, 60, NULL);
+	cvCreateTrackbar("Z_limit_MIN", "picture", &z_min, 60, NULL);
+
+
+	// Starting the while loop where we continually filter with limits using trackbars and display pointcloud
+	// Ctrl-c to break
+	char last_c = 0;
+	while(true && (last_c != 27))
+	{
+
+		pcl::copyPointCloud(*cloud_filtered, *cloud);
+
+		// i,j,k Need to be adjusted depending on the pointcloud and its xyz limits if used with new pointclouds.
+
+		i_max = 0.05 * ((float)z_max);
+		i_min = 0.05 * ((float)z_min);
+		j_max = 0.05 * ((float)x_max);
+		j_min = 0.05 * ((float)x_min);
+		k_max = 0.05 * ((float)y_max);
+		k_min = 0.05 * ((float)y_min);
+
+		// Applying passthrough filters with XYZ limits
+
+		pcl::PassThrough<pcl::PointXYZRGBA> pass;
+		pass.setInputCloud (cloud);
+		pass.setFilterFieldName ("y");
+		pass.setFilterLimits (-k_min, k_max);
+		pass.filter (*cloud);
+
+		pass.setInputCloud (cloud);
+		pass.setFilterFieldName ("x");
+		pass.setFilterLimits (-j_min, j_max);
+		pass.filter (*cloud);
+
+		pass.setInputCloud (cloud);
+		pass.setFilterFieldName ("z");
+		pass.setFilterLimits (-i_min, i_max);
+		pass.filter (*cloud);
+
+		// Visualizing pointcloud
+		viewer.addPointCloud (cloud, "scene_cloud");
+		viewer.spinOnce();
+		viewer.removePointCloud("scene_cloud");
+		
+		// Si presionamos c, se guarda la nube de puntos filtrada
+		std::ostringstream oss;
+
+		switch (key) 
+                { 
+                        case 'c': 
+				oss << "/home/lacatus/Escritorio/3D/PCL_Proyects/PASS_T_PCD/PCD/foto_"
+							<< currentDateTime() <<"_PTFILres.pcd";
+				pcl::io::savePCDFileASCII (oss.str(),*cloud);
+				boost::this_thread::sleep (boost::posix_time::seconds (1));
+                                break; 
+                        default: 
+                                break; 
+                } 
+
+		cvWaitKey(10);
+	}	
+
+	return (0);
+}
